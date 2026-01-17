@@ -1,0 +1,307 @@
+{
+  "name": "Call-ID Remover",
+  "nodes": [
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1UVtLWZp5WlMeyAlw4NEv8LSnj9iY4aovS-4xepN6zcQ",
+          "mode": "list",
+          "cachedResultName": "Dummy",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UVtLWZp5WlMeyAlw4NEv8LSnj9iY4aovS-4xepN6zcQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1545782209,
+          "mode": "list",
+          "cachedResultName": "Lead list",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UVtLWZp5WlMeyAlw4NEv8LSnj9iY4aovS-4xepN6zcQ/edit#gid=1545782209"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        272,
+        0
+      ],
+      "id": "fa34d0e2-17fb-44ba-9f49-cff59d972434",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Lit8NJf2DhWKwNS8",
+          "name": "calls.aiagents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# Keep rows that have a real Call-ID, limit to 15, and CLEAR the Call-ID field\n\noutput = []\n\nfor item in _input.all():\n    call_id = item.json.get(\"Call-ID\", \"\").strip()\n    if call_id and call_id.lower() != \"empty\":\n        item.json[\"Call-ID\"] = \"\"   # <-- clear the cell\n        output.append(item)\n\n# only first 15\nreturn output[:20]\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        0
+      ],
+      "id": "a7e901f8-9205-4016-865c-525ca4543041",
+      "name": "Code in Python (Beta)"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1UVtLWZp5WlMeyAlw4NEv8LSnj9iY4aovS-4xepN6zcQ",
+          "mode": "list",
+          "cachedResultName": "Dummy",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UVtLWZp5WlMeyAlw4NEv8LSnj9iY4aovS-4xepN6zcQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1545782209,
+          "mode": "list",
+          "cachedResultName": "Lead list",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UVtLWZp5WlMeyAlw4NEv8LSnj9iY4aovS-4xepN6zcQ/edit#gid=1545782209"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "PhoneNumber": "={{ $json.PhoneNumber }}",
+            "Call-ID": "={{ $json['Call-ID'] }}"
+          },
+          "matchingColumns": [
+            "PhoneNumber"
+          ],
+          "schema": [
+            {
+              "id": "Demo",
+              "displayName": "Demo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "PhoneNumber",
+              "displayName": "PhoneNumber",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "PhoneID",
+              "displayName": "PhoneID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Call-ID",
+              "displayName": "Call-ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Reviewed",
+              "displayName": "Reviewed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Script",
+              "displayName": "Script",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Voice-URL",
+              "displayName": "Voice-URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Summary",
+              "displayName": "Summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Call Status",
+              "displayName": "Call Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Rotation",
+              "displayName": "Rotation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Keywords",
+              "displayName": "Keywords",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Interest",
+              "displayName": "Interest",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        720,
+        0
+      ],
+      "id": "f76b2988-c644-4024-a91a-157e859a193a",
+      "name": "Update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Lit8NJf2DhWKwNS8",
+          "name": "calls.aiagents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 4
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        48,
+        0
+      ],
+      "id": "e8603e9a-523c-41d1-aa81-e712f4a2df62",
+      "name": "Schedule Trigger"
+    }
+  ],
+  "connections": {
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": {
+    "node:Schedule Trigger": {
+      "recurrenceRules": []
+    }
+  },
+  "pinData": {},
+  "triggerCount": 1,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

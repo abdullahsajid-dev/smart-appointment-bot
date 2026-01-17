@@ -1,0 +1,409 @@
+{
+  "name": "Appointment setter",
+  "nodes": [
+    {
+      "parameters": {
+        "functionCode": "// Input:  $json.startIso, $json.endIso  (on the SAME item)\n// Output: dayStartIso, dayEndIso, requestWindow\n\nif (!$json.startIso || !$json.endIso) {\n  return [{ json: { error: 'Missing startIso/endIso on current item' } }];\n}\n\nconst start = new Date($json.startIso);\nconst end   = new Date($json.endIso);\n\n// derive \"local\" day boundaries from start's timezone offset\nconst tzOffsetMin = start.getTimezoneOffset(); // minutes offset from UTC (note: sign is opposite)\nfunction startOfDay(dt) {\n  const d = new Date(dt);\n  d.setHours(0, 0, 0, 0);\n  return d;\n}\nfunction endOfDay(dt) {\n  const d = new Date(dt);\n  d.setHours(23, 59, 59, 999);\n  return d;\n}\n\nconst dayStart = startOfDay(start);\nconst dayEnd   = endOfDay(start);\n\n// Keep them as ISO-8601 strings\nreturn [{\n  json: {\n    requestWindow: { startIso: $json.startIso, endIso: $json.endIso },\n    dayStartIso: dayStart.toISOString(),\n    dayEndIso: dayEnd.toISOString()\n  }\n}];\n"
+      },
+      "id": "c7eb3df8-ca72-46cf-b711-d799a674ad5f",
+      "name": "Day Window (Start/End)",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        144,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "requestMethod": "POST",
+        "url": "https://www.googleapis.com/calendar/v3/freeBusy",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={{ { \"timeMin\": $json.dayStartIso, \"timeMax\": $json.dayEndIso, \"items\": [ { \"id\": \"calls.aiagents@gmail.com\" } ] } }}",
+        "headerParametersJson": "[\n  { \"name\": \"Content-Type\", \"value\": \"application/json\" }\n]\n",
+        "queryParametersJson": "[]\n"
+      },
+      "id": "bd605fab-3985-4163-b81c-627b767bdacf",
+      "name": "FreeBusy (Full Day)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        368,
+        224
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "zW2vFChsRqwRqSUF",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Works with Google FreeBusy response:\n// { calendars: { \"<calendarId>\": { busy: [{start, end}, ...] } }, ... }\n\nconst calendars = $json.calendars || {};\n\n// Prefer a calendarId from the item if you passed one earlier; else take the first key; else 'primary'\nconst calendarId =\n  $json.calendarId ||\n  Object.keys(calendars)[0] ||\n  'primary';\n\nconst busyArr = Array.isArray(calendars[calendarId]?.busy)\n  ? calendars[calendarId].busy\n  : [];\n\n// Pretty print in Asia/Dubai\nconst fmt = new Intl.DateTimeFormat('en-GB', {\n  dateStyle: 'medium',\n  timeStyle: 'short',\n  timeZone: 'Asia/Dubai',\n});\n\nconst busySlotsUAE = busyArr.map(b => ({\n  startIso: b.start,\n  endIso: b.end,\n  start: fmt.format(new Date(b.start)),\n  end: fmt.format(new Date(b.end)),\n}));\n\nreturn [{\n  json: {\n    calendarId,\n    busySlotsCount: busySlotsUAE.length,\n    busySlotsUAE,\n    window: { timeMin: $json.timeMin, timeMax: $json.timeMax }\n  }\n}];\n"
+      },
+      "id": "3f4fdb0d-fd01-4236-8886-a246494b761c",
+      "name": "Format Busy Slots",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        592,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jx/appointments",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b686bae8-3b95-4c9f-80ea-f5516d2ab335",
+      "name": "Webhook1",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -1424,
+        128
+      ],
+      "webhookId": "93a767e1-059c-4d4d-a0d9-fe3978c6ae6b"
+    },
+    {
+      "parameters": {
+        "functionCode": "/**\n * Pass-through + Dubai ISO window from natural phrases like \"tomorrow 5pm\"\n * Output fields:\n *  - startIso (e.g., 2025-09-25T17:00:00+04:00)\n *  - endIso   (start + 30min)\n *  - timeZone (\"Asia/Dubai\")\n *  - rawTime  (original)\n *  - ...all original input fields\n */\n\nconst TZ = 'Asia/Dubai';\n\nfunction pickRawTime(obj) {\n  if (!obj) return '';\n  if (typeof obj === 'string') return obj;\n  return (\n    obj.time ||\n    obj.appTime ||\n    obj?.message?.content ||\n    obj.content ||\n    obj.text ||\n    obj.data ||\n    ''\n  );\n}\n\nfunction parseNaturalToDubaiISO(nl) {\n  const s = String(nl || '').trim();\n  if (!s) throw new Error('No time provided');\n\n  // If it already looks ISO-ish (YYYY-MM-DD...), let Luxon parse then move to Dubai\n  if (/^\\d{4}-\\d{2}-\\d{2}T?\\d{0,2}:?\\d{0,2}:?\\d{0,2}(\\.\\d+)?([+-]\\d{2}:\\d{2}|Z)?$/i.test(s)) {\n    const dt = DateTime.fromISO(s, { setZone: true });\n    if (!dt.isValid) throw new Error('Invalid ISO datetime: ' + s);\n    return dt.setZone(TZ).toISO({ includeOffset: true, suppressMilliseconds: true });\n  }\n\n  // Otherwise treat it as a natural phrase like \"today 3pm\", \"tomorrow 5pm\"\n  let base = DateTime.now().setZone(TZ);\n\n  const low = s.toLowerCase();\n\n  // Day words\n  if (low.includes('tomorrow')) base = base.plus({ days: 1 });\n  else if (low.includes('today')) base = base.plus({ days: 0 });\n\n  // Optional weekday (next monday 2pm)\n  const wk = low.match(/\\bnext\\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\\b/);\n  if (wk) {\n    const names = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];\n    const target = names.indexOf(wk[1]);\n    let diff = (target - base.weekday % 7 + 7) % 7;\n    if (diff === 0) diff = 7; // always next, not today\n    base = base.plus({ days: diff });\n  }\n\n  // Time: \"5pm\", \"5 pm\", \"17:30\", \"5:15 pm\"\n  const m = low.match(/(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)?/i);\n  if (!m) throw new Error('Could not find a time like 5pm or 17:30 in: ' + s);\n\n  let hour = parseInt(m[1], 10);\n  let minute = parseInt(m[2] || '0', 10);\n  const ap = (m[3] || '').toLowerCase();\n  if (ap === 'pm' && hour < 12) hour += 12;\n  if (ap === 'am' && hour === 12) hour = 0;\n\n  const dt = base.set({ hour, minute, second: 0, millisecond: 0 });\n  return dt.toISO({ includeOffset: true, suppressMilliseconds: true });\n}\n\n// ---- main ----\nconst input = { ...$json };\nconst raw = String(pickRawTime(input) || '').trim();\nif (!raw) throw new Error('No time provided');\n\nconst startIso = parseNaturalToDubaiISO(raw);\nconst endIso = DateTime.fromISO(startIso, { setZone: true })\n  .plus({ minutes: 30 })\n  .toISO({ includeOffset: true, suppressMilliseconds: true });\n\nreturn [\n  {\n    json: {\n      ...input,\n      rawTime: raw,\n      startIso,\n      endIso,\n      timeZone: TZ,\n    },\n  },\n];\n"
+      },
+      "id": "c080376e-fe13-4e85-85f3-285e0c74feef",
+      "name": "Compute Window1",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -976,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [],
+          "boolean": [
+            {
+              "value1": "={{ $json.available }}",
+              "value2": "={{ true }}"
+            }
+          ]
+        }
+      },
+      "id": "14e1e0e0-d133-4049-aa5b-99c7e4ce35c3",
+      "name": "IF Available?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "id": "7a84bcc4-a848-4fe3-8401-e7b3bd4c951b",
+      "name": "Respond (Booked)1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        368,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "d9d43f6d-73e3-4bf7-857c-e2c4073da7bd",
+      "name": "Respond (Suggest Times)1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        816,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "calendar",
+        "calendar": {
+          "__rl": true,
+          "value": "calls.aiagents@gmail.com",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -528,
+        56
+      ],
+      "id": "017f65e5-6adb-4bbd-997e-1bf979fb6067",
+      "name": "Get availability in a calendar1",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "2PrYG18HUhQSyraD",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "Name",
+              "value": "={{ $json.name }} \n"
+            },
+            {
+              "name": "Phone",
+              "value": "={{ $json.phone }}"
+            },
+            {
+              "name": "startIso",
+              "value": "={{ $json.startIso }}"
+            },
+            {
+              "name": "endIso",
+              "value": "={{ $json.endIso }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Build Event Payload1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -752,
+        128
+      ],
+      "id": "a5023601-95ad-48f7-89ed-d438a82e673e"
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "name",
+              "value": "={{ $json.body.message.toolCalls[0].function.arguments.name }}"
+            },
+            {
+              "name": "time",
+              "value": "={{ $json.body.message.toolCalls[0].function.arguments.time }}"
+            },
+            {
+              "name": "phone",
+              "value": "={{ $json.body.message.toolCallList[0].function.arguments.phone }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f2b7aaff-5ccc-4416-8615-078f95417d89",
+      "name": "Pick Fields1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -1200,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "name": "Merge Input + Availability1",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        -304,
+        128
+      ],
+      "id": "1b5bf81f-6245-454d-9a33-b674f3614728"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "requestMethod": "POST",
+        "url": "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={{ JSON.stringify({\n  summary: `Call with ${$json[\"Name\"] || $json.name || \"Prospect\"}`,\n  description: `Phone: ${$json[\"Phone\"] || $json.phone || \"N/A\"}`,\n  start: {\n    dateTime: $json[\"startIso\"] || $json[\"start\"],\n    timeZone: \"Asia/Dubai\"\n  },\n  end: {\n    dateTime: ($json[\"endIso\"] || $json[\"end\"]) || new Date(new Date($json[\"startIso\"] || $json[\"start\"]).getTime() + 30 * 60000).toISOString(),\n    timeZone: \"Asia/Dubai\"\n  }\n}) }}",
+        "headerParametersJson": "={}",
+        "queryParametersJson": "={}"
+      },
+      "id": "65c9efe8-8353-4597-a032-5a5eb02dda71",
+      "name": "Create Event (GCal)2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        144,
+        32
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "zW2vFChsRqwRqSUF",
+          "name": "Unnamed credential"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Day Window (Start/End)": {
+      "main": [
+        [
+          {
+            "node": "FreeBusy (Full Day)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FreeBusy (Full Day)": {
+      "main": [
+        [
+          {
+            "node": "Format Busy Slots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Busy Slots": {
+      "main": [
+        [
+          {
+            "node": "Respond (Suggest Times)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Pick Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Window1": {
+      "main": [
+        [
+          {
+            "node": "Build Event Payload1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Available?1": {
+      "main": [
+        [
+          {
+            "node": "Create Event (GCal)2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Day Window (Start/End)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get availability in a calendar1": {
+      "main": [
+        [
+          {
+            "node": "Merge Input + Availability1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Build Event Payload1": {
+      "main": [
+        [
+          {
+            "node": "Get availability in a calendar1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Input + Availability1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Fields1": {
+      "main": [
+        [
+          {
+            "node": "Compute Window1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Input + Availability1": {
+      "main": [
+        [
+          {
+            "node": "IF Available?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Event (GCal)2": {
+      "main": [
+        [
+          {
+            "node": "Respond (Booked)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {},
+  "triggerCount": 1,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

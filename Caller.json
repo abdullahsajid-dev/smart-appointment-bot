@@ -1,0 +1,520 @@
+{
+  "name": "JX_Caller",
+  "nodes": [
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1eed4546-4a31-4aef-93ed-74c48be1bf27",
+              "name": "maxLeads",
+              "value": "10",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2432,
+        112
+      ],
+      "id": "5e46ca4f-0780-4a15-949c-9bdc50999684",
+      "name": "Set constants"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -1088,
+        112
+      ],
+      "id": "68f5c297-c336-4731-80a8-a9cc34b3d870",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "3156ccca-2572-4a61-bd0c-389e7bf9d0b4",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        -1760,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1UVtLWZp5WlMeyAlw4NEv8LSnj9iY4aovS-4xepN6zcQ",
+          "mode": "list",
+          "cachedResultName": "Dummy",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UVtLWZp5WlMeyAlw4NEv8LSnj9iY4aovS-4xepN6zcQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1545782209,
+          "mode": "list",
+          "cachedResultName": "Lead list",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UVtLWZp5WlMeyAlw4NEv8LSnj9iY4aovS-4xepN6zcQ/edit#gid=1545782209"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -2208,
+        112
+      ],
+      "id": "2ec38ef3-a228-45cb-a696-944576349ebd",
+      "name": "Lead List",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Lit8NJf2DhWKwNS8",
+          "name": "calls.aiagents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1fmNbivODrseK7XJV8CZfWPP0G6rC-LkoiX_Of5YfRqw",
+          "mode": "list",
+          "cachedResultName": "AI Calling Sheet 2.0",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1fmNbivODrseK7XJV8CZfWPP0G6rC-LkoiX_Of5YfRqw/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1730495261,
+          "mode": "list",
+          "cachedResultName": "Phone Numbers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1fmNbivODrseK7XJV8CZfWPP0G6rC-LkoiX_Of5YfRqw/edit#gid=1730495261"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1536,
+        192
+      ],
+      "id": "3fac2bb8-6a75-4669-a76c-9afcdfa7d171",
+      "name": "Phone Number ID",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Lit8NJf2DhWKwNS8",
+          "name": "calls.aiagents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\n\nfor (const it of items) {\n  const r = it.json;\n\n  // 1) Originals\n  const phoneRaw = String(r['PhoneNumber'] ?? '').trim();   // keep EXACT as in sheet\n  const statusRaw = String(r['Status'] ?? '').trim();\n\n  // 2) Normalize for robust checks (remove spaces, keep digits, drop leading '+')\n  const phoneNorm = phoneRaw.replace(/\\s+/g, '').replace(/^\\+/, '');\n  const status = statusRaw.toLowerCase().replace(/\\s+/g, '-'); // handles \"not called\" / \"Not-called\" etc.\n\n  // 3) Pass if status is not-called AND PK/UAE numbers\n  const isTargetStatus = (status === 'not-called');\n  const isPkOrUae = phoneNorm.startsWith('92') || phoneNorm.startsWith('971');\n\n  if (isTargetStatus && isPkOrUae) {\n    out.push({\n      json: {\n        rowNumber: r['row_number'] ?? null,\n        phone: phoneRaw,                 // <-- EXACT same PhoneNumber as input\n        firstName: r['Name'] ?? '',\n        country: r['Country'] ?? ''\n      }\n    });\n  }\n}\n\nreturn out;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1984,
+        112
+      ],
+      "id": "a7641dfa-b890-4351-b0a0-1cdf8b04bab1",
+      "name": "Not called (92 or 971)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const first = (items[0] && items[0].json) || {};\nconst keys = Object.keys(first);\nconst norm = s => String(s).toLowerCase().replace(/\\s+/g,'');\n\nconst statusKey = keys.find(k => norm(k)==='status') || 'Status';\nconst idKey = keys.find(k => ['phonenumberid','phonenumberid','numberid','a'].includes(norm(k))) || 'Phone Number Id';\n\nconst active = items.filter(i => String(i.json[statusKey]||'').toLowerCase().trim()==='active');\nif (!active.length) throw new Error(`No ACTIVE rows in Phone Numbers (check column \"${statusKey}\")`);\n\nconst pick = active[Math.floor(Math.random()*active.length)];\nreturn [{ json: { phoneNumberId: String(pick.json[idKey]||'').trim() } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1312,
+        192
+      ],
+      "id": "64ed7ee4-5be6-4711-870e-b29b7a6daca2",
+      "name": "Active Phone ID"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1UVtLWZp5WlMeyAlw4NEv8LSnj9iY4aovS-4xepN6zcQ",
+          "mode": "list",
+          "cachedResultName": "Dummy",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UVtLWZp5WlMeyAlw4NEv8LSnj9iY4aovS-4xepN6zcQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1545782209,
+          "mode": "list",
+          "cachedResultName": "Lead list",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UVtLWZp5WlMeyAlw4NEv8LSnj9iY4aovS-4xepN6zcQ/edit#gid=1545782209"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Name": "={{ $json.firstName }}",
+            "Status": "called",
+            "PhoneID": "={{ $json.phoneNumberId }}",
+            "Call-ID": "={{ $json.vapiResponse.id }}",
+            "PhoneNumber": "={{ $json.phone }}",
+            "Time": "={{ $json.vapiResponse.createdAt }}"
+          },
+          "matchingColumns": [
+            "Name"
+          ],
+          "schema": [
+            {
+              "id": "92",
+              "displayName": "92",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "PhoneNumber",
+              "displayName": "PhoneNumber",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "PhoneID",
+              "displayName": "PhoneID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Call-ID",
+              "displayName": "Call-ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Reviewed",
+              "displayName": "Reviewed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Script",
+              "displayName": "Script",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Voice-URL",
+              "displayName": "Voice-URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Summary",
+              "displayName": "Summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Call Status",
+              "displayName": "Call Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Rotation",
+              "displayName": "Rotation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Keywords",
+              "displayName": "Keywords",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Interest",
+              "displayName": "Interest",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Time",
+              "displayName": "Time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -416,
+        112
+      ],
+      "id": "9a0bc3c3-d3d7-4886-ab40-ebfcbe2b5a21",
+      "name": "Append or update row in sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Lit8NJf2DhWKwNS8",
+          "name": "calls.aiagents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * --- PURPOSE ---\n * Clean and truncate long names for VAPI.ai (max 40 chars)\n * Also ensure phone numbers are E.164 formatted\n */\n\nconst MAX_NAME_LEN = 40;\n\nfunction cleanName(name) {\n  if (!name) return 'Unknown';\n  let n = String(name)\n    .replace(/[^\\p{L}\\p{N}\\s.'-]/gu, '')   // keep letters/numbers/spaces\n    .replace(/\\s+/g, ' ')\n    .trim();\n\n  if (n.length > MAX_NAME_LEN) n = n.slice(0, MAX_NAME_LEN);\n  if (!n) n = 'Unknown';\n  return n;\n}\n\nfunction toE164(phone) {\n  if (!phone) return '';\n  const digits = String(phone).replace(/[^\\d+]/g, '');\n  return digits.startsWith('+') ? digits : ('+' + digits.replace(/^0+/, ''));\n}\n\nconst out = [];\nfor (const item of $input.all()) {\n  const row = item.json;\n  const cleanedName = cleanName(row.firstName || row.Name || '');\n  const cleanPhone = toE164(row.phone || row.PhoneNumber || '');\n\n  out.push({\n    json: {\n      ...row,\n      vapi_customer_name: cleanedName,\n      vapi_phone: cleanPhone\n    }\n  });\n}\n\nreturn out;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -864,
+        112
+      ],
+      "id": "8e0d2770-4ab7-4d29-8c60-d722555eacd5",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ✅ Safe HTTP version – no axios, no template brackets, works in n8n Cloud\n\nconst url = \"https://api.vapi.ai/call/phone\";\n\nconst payload = {\n  phoneNumberId: $json.phoneNumberId,\n  customer: {\n    number: \"+\" + $json.phone,\n    name: $json.vapi_customer_name,\n  },\n  assistantId: \"ac83d07b-d70d-4a72-8903-97f00226deb1\",\n};\n\ntry {\n  const res = await this.helpers.httpRequest({\n    method: 'POST',\n    url,\n    headers: {\n      \"Content-Type\": \"application/json\",\n      \"Authorization\": \"5bc6f98f-1199-4aff-9afa-3edd9f19cc45\",\n    },\n    body: payload,\n    json: true,\n    timeout: 20000\n  });\n\n  return [{\n    json: {\n      ...$json,\n      callStatus: 'success',\n      vapiResponse: res\n    }\n  }];\n\n} catch (err) {\n  const message = err.error?.message || err.message || 'Unknown API error';\n  return [{\n    json: {\n      ...$json,\n      callStatus: 'failed',\n      error: message\n    }\n  }];\n}\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -640,
+        112
+      ],
+      "id": "6dce5b86-b4b8-4e77-9011-e2e5afe669a4",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds",
+              "secondsInterval": 10
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -2656,
+        112
+      ],
+      "id": "4c10ca27-846f-4263-9add-3669e5229bad",
+      "name": "Schedule Trigger"
+    }
+  ],
+  "connections": {
+    "Set constants": {
+      "main": [
+        [
+          {
+            "node": "Lead List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "Phone Number ID",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead List": {
+      "main": [
+        [
+          {
+            "node": "Not called (92 or 971)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Phone Number ID": {
+      "main": [
+        [
+          {
+            "node": "Active Phone ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Not called (92 or 971)": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Active Phone ID": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set constants",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dubai",
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": {
+    "node:Schedule Trigger": {
+      "recurrenceRules": []
+    }
+  },
+  "pinData": {},
+  "triggerCount": 1,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

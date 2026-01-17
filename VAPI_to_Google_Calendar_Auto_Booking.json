@@ -1,0 +1,260 @@
+{
+  "name": "VAPI to Google Calendar Auto Booking",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "vapi-meeting-booked",
+        "options": {}
+      },
+      "name": "Webhook - VAPI Meeting Booked",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1088,
+        632
+      ],
+      "id": "d46a91e6-70d8-4b47-8aa3-6b0fe756c13b",
+      "webhookId": "c29255b9-9a4c-4bbd-bbc8-3accb318f2d0"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Function to parse time zone like \"+05:00\" or \"-04:00\"\nconst parseTimezone = (tz) => {\n    const m = String(tz).match(/^[+-](\\d{2})(?::?(\\d{2}))?$/);\n    if (m) {\n        const sign = m[1] === '-' ? -1 : 1;\n        const hh = parseInt(m[2], 10);\n        const mm = parseInt(m[3] || '0', 10);\n        return sign * (hh + mm / 60);\n    }\n    return 5; // default fallback\n};\n\n// Function to parse time (e.g., \"Tomorrow at 5 PM\")\nconst parseTime = (inputTime) => {\n    const today = new Date();\n    let timeString = inputTime.toLowerCase().includes('tomorrow') ? 'tomorrow' : 'today';\n\n    // Extract hour and minute\n    const match = inputTime.match(/(\\d+)(?:[: ]?(\\d{1,2}))?\\s*(am|pm)/i);\n    if (match) {\n        let hours = parseInt(match[1]);\n        let minutes = match[2] ? parseInt(match[2]) : 0;\n\n        if (match[3] && match[3].toLowerCase() === 'pm' && hours < 12) {\n            hours += 12; // Convert to 24-hour format\n        } else if (match[3] && match[3].toLowerCase() === 'am' && hours === 12) {\n            hours = 0; // Convert midnight hour to 0\n        }\n\n        // Set the date/time accordingly\n        const date = timeString === 'tomorrow' ? new Date(today.setDate(today.getDate() + 1)) : today;\n        date.setHours(hours, minutes, 0, 0); // Set the specific time\n\n        // Add 15 minutes for the end time\n        const endTime = new Date(date.getTime());\n        endTime.setMinutes(endTime.getMinutes() + 15); // Add 15 minutes\n\n        return { startTime: date, endTime: endTime }; // Return both start and end times\n    }\n    return null;\n};\n\n// Example input\nconst inputData = {\n    time: \"Tomorrow at 5 PM\",\n    email: \"customer@example.com\", // replace with actual email\n    name: \"John Doe\", // replace with actual name\n};\n\n// Parse the time\nconst parsedTimes = parseTime(inputData.time);\n\n// Return the output as an array with the parsed start time, end time, email, and name\nreturn [{\n    startTime: parsedTimes ? parsedTimes.startTime.toISOString() : 'Invalid time format',\n    endTime: parsedTimes ? parsedTimes.endTime.toISOString() : 'Invalid time format',\n    email: inputData.email,\n    name: inputData.name\n}];\n"
+      },
+      "name": "Code - Parse & Build Slot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -640,
+        632
+      ],
+      "id": "d97cd532-c8b2-43a7-913d-fae986e3d77d"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "9xero.tools@gmail.com",
+          "mode": "list",
+          "cachedResultName": "9xero.tools@gmail.com"
+        },
+        "start": "={{ $json.startTime }}",
+        "end": "={{ $json.endTime }}",
+        "additionalFields": {}
+      },
+      "name": "Google Calendar - Check Slot",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        -416,
+        560
+      ],
+      "id": "14e53cfa-379f-4939-9c87-50b16cdf4143",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "c5O7nvzWBAeYMZZB",
+          "name": "Google Calendar account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.creator.email }}",
+        "subject": "={{`Your meeting with 9Xero is confirmed`}}",
+        "message": "={{`Hi ${$json.name || \"Customer\"},\n\\n\\nYour meeting with 9Xero is confirmed.\\n\\nTime: ${$json.start.dateTime} to ${$json.end.dateTime}\\nTimezone: ${$json.start.timeZone}\\n\\nAgenda:\\n${$json.summary}\\n\\nYou can view and add the meeting to your calendar using the following link:\\n${$json.htmlLink}\n\\n\\nA calendar invite has been sent to you.\n\\n\\nRegards,\n\\n9Xero Team`}}\n",
+        "options": {}
+      },
+      "name": "Gmail - Confirmation Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        256,
+        640
+      ],
+      "id": "981b3500-b150-4643-b5a8-b8313ee9b8ce",
+      "webhookId": "d1b1ce26-3ce1-47fa-a410-7df4cdfd414b",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "lKX5fwC4rHFmVHsK",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7820ad8a-19d1-4d7e-8ed2-3bd9dc1760be",
+              "name": "body.message.toolCalls[0].function.arguments.Time",
+              "value": "={{ $json.body.message.toolCalls[0].function.arguments.Time }}",
+              "type": "string"
+            },
+            {
+              "id": "1c149a26-0069-4f87-b533-b35b842f5515",
+              "name": "body.message.toolCalls[0].function.arguments.Email",
+              "value": "={{ $json.body.message.toolCalls[0].function.arguments.Email }}",
+              "type": "string"
+            },
+            {
+              "id": "0f18ce03-5fea-481e-8686-9aef8d3d6ca4",
+              "name": "body.message.toolCalls[0].function.arguments.Name",
+              "value": "={{ $json.body.message.toolCalls[0].function.arguments.Name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -864,
+        632
+      ],
+      "id": "63d2ea80-daa3-44bd-88c6-36c1b60f6cde",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Input:  $json.startTime, $json.endTime (from the event data)\n// Output: dayStartIso, dayEndIso, requestWindow\n\nif (!$json.startTime || !$json.endTime) {\n  return [{ json: { error: 'Missing startTime/endTime on current item' } }];\n}\n\nconst start = new Date($json.startTime);  // Using $json.startTime (ISO-8601 format)\nconst end   = new Date($json.endTime);    // Using $json.endTime (ISO-8601 format)\n\n// Derive \"local\" day boundaries from start's timezone offset\nconst tzOffsetMin = start.getTimezoneOffset();  // minutes offset from UTC (note: sign is opposite)\nfunction startOfDay(dt) {\n  const d = new Date(dt);\n  d.setHours(0, 0, 0, 0);  // Set to midnight (start of the day)\n  return d;\n}\nfunction endOfDay(dt) {\n  const d = new Date(dt);\n  d.setHours(23, 59, 59, 999);  // Set to the last millisecond of the day\n  return d;\n}\n\nconst dayStart = startOfDay(start);\nconst dayEnd   = endOfDay(start);\n\n// Keep them as ISO-8601 strings\nreturn [{\n  json: {\n    requestWindow: { startIso: $json.startTime, endIso: $json.endTime },\n    dayStartIso: dayStart.toISOString(),\n    dayEndIso: dayEnd.toISOString()\n  }\n}];\n"
+      },
+      "id": "3a51efb0-ee9c-42b9-b600-6fff5d31bf4e",
+      "name": "Day Window (Start/End)",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1088,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -192,
+        632
+      ],
+      "id": "983bcde8-2493-4932-af2b-9b8370c9f887",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "requestMethod": "POST",
+        "url": "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={\n  \"summary\": \"Call with {{ $json.name || 'Prospect' }}\",\n  \"description\": \"Phone: {{ $json['phone'] || 'N/A' }}\",\n  \"start\": {\n    \"dateTime\": \"{{ $json.startTime || new Date().toISOString() }}\",\n    \"timeZone\": \"Asia/Karachi\"\n  },\n  \"end\": {\n    \"dateTime\": \"{{ $json.endTime || new Date(new Date($json.startTime).getTime() + 30 * 60000).toISOString() }}\",\n    \"timeZone\": \"Asia/Karachi\"\n  },\n  \"attendees\": [{\n    \"email\": \"{{ $json.email || 'customer@example.com' }}\"\n  }],\n  \"creator\": {\n    \"email\": \"9xero.tools@gmail.com\"\n  },\n  \"organizer\": {\n    \"email\": \"9xero.tools@gmail.com\"\n  },\n  \"reminders\": {\n    \"useDefault\": true\n  },\n  \"iCalUID\": \"event-{{ new Date().getTime() }}@google.com\",\n  \"sequence\": 0,\n  \"status\": \"confirmed\"\n}"
+      },
+      "id": "e9566793-2355-4079-bf89-c58edd721616",
+      "name": "Create Event (GCal)1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        32,
+        632
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "gDQRdwJlXw8HHZL1",
+          "name": "Unnamed credential 2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook - VAPI Meeting Booked": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Parse & Build Slot": {
+      "main": [
+        [
+          {
+            "node": "Google Calendar - Check Slot",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Google Calendar - Check Slot": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Code - Parse & Build Slot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Day Window (Start/End)": {
+      "main": [
+        []
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Create Event (GCal)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Event (GCal)1": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Confirmation Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "pinData": {},
+  "triggerCount": 1,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
